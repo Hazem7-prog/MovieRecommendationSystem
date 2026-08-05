@@ -18,13 +18,15 @@ public class Movie
 
     public string PosterUrl { get; set; } = string.Empty;
 
-    public string Director { get; set; } = string.Empty;
+    public string Directors { get; set; } = string.Empty;
 
-    public string Cast { get; set; } = string.Empty;
+    public string CastMembers { get; set; } = string.Empty;
 
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }
 
     public bool IsDeleted { get; set; }
+
+    public ICollection<Genre> Genres { get; set; } = [];
 }
