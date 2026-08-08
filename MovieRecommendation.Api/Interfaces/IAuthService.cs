@@ -1,10 +1,11 @@
 ﻿using MovieRecommendation.Api.DTOs.Auth;
+using MovieRecommendation.Api.DTOs.Responses;
 
 namespace MovieRecommendation.Api.Interfaces;
 
 public interface IAuthService
 {
-    Task<string> RegisterAsync(RegisterDto dto);
+    Task<AuthResponseDto> RegisterAsync(RegisterDto dto);
 
-    Task<string> LoginAsync(LoginDto dto);
+    Task<AuthResponseDto> LoginAsync(LoginDto dto);
 }
