@@ -68,6 +68,7 @@ builder.Services.AddAuthentication(options =>
 // Dependency Injection
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IMovieService, MovieService>();
 
 // Controllers
 builder.Services.AddControllers();
