@@ -24,4 +24,69 @@ public class MoviesController : ControllerBase
 
         return Ok(movie);
     }
+
+
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetById(int id)
+    {
+        var movie = await _movieService.GetByIdAsync(id);
+
+        if (movie == null)
+        {
+            return NotFound(new
+            {
+                message = "Movie not found."
+            });
+        }
+
+        return Ok(movie);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        var movies = await _movieService.GetAllAsync();
+
+        return Ok(movies);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPut("{id}")]
+    public async Task<IActionResult> Update(int id, UpdateMovieDto dto)
+    {
+        var result = await _movieService.UpdateAsync(id, dto);
+
+        if (!result)
+        {
+            return NotFound(new
+            {
+                message = "Movie not found."
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Movie updated successfully."
+        });
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var result = await _movieService.DeleteAsync(id);
+
+        if (!result)
+        {
+            return NotFound(new
+            {
+                message = "Movie not found."
+            });
+        }
+
+        return Ok(new
+        {
+            message = "Movie deleted successfully."
+        });
+    }
 }

@@ -60,23 +60,125 @@ public class MovieService : IMovieService
         };
     }
 
-    public Task<MovieResponseDto?> GetByIdAsync(int id)
+    public async Task<MovieResponseDto?> GetByIdAsync(int id)
     {
-        throw new NotImplementedException();
+        var movie = await _context.Movies
+            .Include(m => m.Genres)
+            .Include(m => m.Ratings)
+            .FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted);
+
+        if (movie == null)
+        {
+            return null;
+        }
+
+        var averageRating = movie.Ratings.Any()
+            ? movie.Ratings.Average(r => r.Score)
+            : 0;
+
+        return new MovieResponseDto
+        {
+            Id = movie.Id,
+            Title = movie.Title,
+            Description = movie.Description,
+            Duration = movie.Duration,
+            ReleaseDate = movie.ReleaseDate,
+            Language = movie.Language,
+            AgeRating = movie.AgeRating,
+            PosterUrl = movie.PosterUrl,
+            Directors = movie.Directors,
+            CastMembers = movie.CastMembers,
+            AverageRating = averageRating,
+            Genres = movie.Genres
+                .Select(g => g.Name)
+                .ToList()
+        };
     }
 
-    public Task<List<MovieResponseDto>> GetAllAsync()
+    public async Task<List<MovieResponseDto>> GetAllAsync()
     {
-        throw new NotImplementedException();
+        var movies = await _context.Movies
+            .Where(m => !m.IsDeleted)
+            .Include(m => m.Genres)
+            .Include(m => m.Ratings)
+            .ToListAsync();
+
+        return movies.Select(movie => new MovieResponseDto
+        {
+            Id = movie.Id,
+            Title = movie.Title,
+            Description = movie.Description,
+            Duration = movie.Duration,
+            ReleaseDate = movie.ReleaseDate,
+            Language = movie.Language,
+            AgeRating = movie.AgeRating,
+            PosterUrl = movie.PosterUrl,
+            Directors = movie.Directors,
+            CastMembers = movie.CastMembers,
+
+            AverageRating = movie.Ratings.Any()
+                ? movie.Ratings.Average(r => r.Score)
+                : 0,
+
+            Genres = movie.Genres
+                .Select(g => g.Name)
+                .ToList()
+        }).ToList();
     }
 
-    public Task<bool> UpdateAsync(int id, UpdateMovieDto dto)
+    public async Task<bool> UpdateAsync(int id, UpdateMovieDto dto)
     {
-        throw new NotImplementedException();
+        var movie = await _context.Movies
+            .Include(m => m.Genres)
+            .FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted);
+
+        if (movie == null)
+        {
+            return false;
+        }
+
+        var genres = await _context.Genres
+            .Where(g => dto.GenreIds.Contains(g.Id))
+            .ToListAsync();
+
+        movie.Title = dto.Title;
+        movie.Description = dto.Description;
+        movie.Duration = dto.Duration;
+        movie.ReleaseDate = dto.ReleaseDate;
+        movie.Language = dto.Language;
+        movie.AgeRating = dto.AgeRating;
+        movie.PosterUrl = dto.PosterUrl;
+        movie.Directors = dto.Directors;
+        movie.CastMembers = dto.CastMembers;
+        movie.UpdatedAt = DateTime.UtcNow;
+
+        movie.Genres.Clear();
+
+        foreach (var genre in genres)
+        {
+            movie.Genres.Add(genre);
+        }
+
+        await _context.SaveChangesAsync();
+
+        return true;
     }
 
-    public Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(int id)
     {
-        throw new NotImplementedException();
+        var movie = await _context.Movies
+            .FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted);
+
+        if (movie == null)
+        {
+            return false;
+        }
+
+        movie.IsDeleted = true;
+        movie.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        return true;
     }
 }

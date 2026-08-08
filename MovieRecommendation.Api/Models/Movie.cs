@@ -29,4 +29,6 @@ public class Movie
     public bool IsDeleted { get; set; }
 
     public ICollection<Genre> Genres { get; set; } = [];
+
+    public ICollection<Rating> Ratings { get; set; } = [];
 }

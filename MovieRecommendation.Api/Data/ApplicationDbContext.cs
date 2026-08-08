@@ -32,7 +32,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         // Delete behavior
         builder.Entity<Rating>()
             .HasOne(r => r.Movie)
-            .WithMany()
+            .WithMany(m => m.Ratings)
             .HasForeignKey(r => r.MovieId)
             .OnDelete(DeleteBehavior.Restrict);
 
