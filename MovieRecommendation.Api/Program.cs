@@ -73,6 +73,7 @@ builder.Services.AddScoped<IGenreService, GenreService>();
 builder.Services.AddScoped<IRatingService, RatingService>();
 builder.Services.AddScoped<IFavoriteService, FavoriteService>();
 builder.Services.AddScoped<IWatchlistService, WatchlistService>();
+builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 
 // Controllers
 builder.Services.AddControllers();
