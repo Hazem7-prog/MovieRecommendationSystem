@@ -95,42 +95,149 @@ public class MovieService : IMovieService
         };
     }
 
-    public async Task<List<MovieResponseDto>> GetAllAsync()
+    public async Task<PagedResultDto<MovieResponseDto>> GetAllAsync(
+        MovieQueryDto query)
     {
-        var movies = await _context.Movies
-            .Where(m => !m.IsDeleted)
+        IQueryable<Movie> movies = _context.Movies
+            .Where(m => !m.IsDeleted);
+
+        // Search by title
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            movies = movies.Where(m =>
+                m.Title.Contains(query.Search));
+        }
+
+        // Filter by genre
+        if (query.GenreId.HasValue)
+        {
+            movies = movies.Where(m =>
+                m.Genres.Any(g => g.Id == query.GenreId.Value));
+        }
+
+        // Filter by language
+        if (!string.IsNullOrWhiteSpace(query.Language))
+        {
+            movies = movies.Where(m =>
+                m.Language == query.Language);
+        }
+
+        // Filter by release year
+        if (query.Year.HasValue)
+        {
+            movies = movies.Where(m =>
+                m.ReleaseDate.Year == query.Year.Value);
+        }
+
+        // Filter by minimum average rating
+        if (query.MinRating.HasValue)
+        {
+            movies = movies.Where(m =>
+                m.Ratings.Any() &&
+                m.Ratings.Average(r => r.Score) >= query.MinRating.Value);
+        }
+
+        // Sorting
+        if (!string.IsNullOrWhiteSpace(query.SortBy))
+        {
+            switch (query.SortBy.ToLower())
+            {
+                case "title":
+                    movies = movies.OrderBy(m => m.Title);
+                    break;
+
+                case "releasedate":
+                    movies = movies.OrderByDescending(m => m.ReleaseDate);
+                    break;
+
+                case "rating":
+                    movies = movies.OrderByDescending(m =>
+                        m.Ratings.Any()
+                            ? m.Ratings.Average(r => r.Score)
+                            : 0);
+                    break;
+
+                default:
+                    movies = movies.OrderBy(m => m.Id);
+                    break;
+            }
+        }
+        else
+        {
+            movies = movies.OrderBy(m => m.Id);
+        }
+
+        // Pagination settings
+        var pageSize = query.PageSize <= 0
+            ? 10
+            : query.PageSize;
+
+        var pageNumber = query.PageNumber <= 0
+            ? 1
+            : query.PageNumber;
+
+        if (pageSize > 50)
+        {
+            pageSize = 50;
+        }
+
+        // Total count before pagination
+        var totalCount = await movies.CountAsync();
+
+        // Pagination
+        movies = movies
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize);
+
+        // Execute query and map to DTO
+        var result = await movies
             .Include(m => m.Genres)
             .Include(m => m.Ratings)
+            .Select(movie => new MovieResponseDto
+            {
+                Id = movie.Id,
+                Title = movie.Title,
+                Description = movie.Description,
+                Duration = movie.Duration,
+                ReleaseDate = movie.ReleaseDate,
+                Language = movie.Language,
+                AgeRating = movie.AgeRating,
+                PosterUrl = movie.PosterUrl,
+                Directors = movie.Directors,
+                CastMembers = movie.CastMembers,
+
+                AverageRating = movie.Ratings.Any()
+                    ? movie.Ratings.Average(r => r.Score)
+                    : 0,
+
+                Genres = movie.Genres
+                    .Select(g => g.Name)
+                    .ToList()
+            })
             .ToListAsync();
 
-        return movies.Select(movie => new MovieResponseDto
+        var totalPages = (int)Math.Ceiling(
+            (double)totalCount / pageSize);
+
+        return new PagedResultDto<MovieResponseDto>
         {
-            Id = movie.Id,
-            Title = movie.Title,
-            Description = movie.Description,
-            Duration = movie.Duration,
-            ReleaseDate = movie.ReleaseDate,
-            Language = movie.Language,
-            AgeRating = movie.AgeRating,
-            PosterUrl = movie.PosterUrl,
-            Directors = movie.Directors,
-            CastMembers = movie.CastMembers,
-
-            AverageRating = movie.Ratings.Any()
-                ? movie.Ratings.Average(r => r.Score)
-                : 0,
-
-            Genres = movie.Genres
-                .Select(g => g.Name)
-                .ToList()
-        }).ToList();
+            Items = result,
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            TotalCount = totalCount,
+            TotalPages = totalPages
+        };
     }
 
-    public async Task<bool> UpdateAsync(int id, UpdateMovieDto dto)
+    public async Task<bool> UpdateAsync(
+        int id,
+        UpdateMovieDto dto)
     {
         var movie = await _context.Movies
             .Include(m => m.Genres)
-            .FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted);
+            .FirstOrDefaultAsync(m =>
+                m.Id == id &&
+                !m.IsDeleted);
 
         if (movie == null)
         {
@@ -167,7 +274,9 @@ public class MovieService : IMovieService
     public async Task<bool> DeleteAsync(int id)
     {
         var movie = await _context.Movies
-            .FirstOrDefaultAsync(m => m.Id == id && !m.IsDeleted);
+            .FirstOrDefaultAsync(m =>
+                m.Id == id &&
+                !m.IsDeleted);
 
         if (movie == null)
         {
@@ -181,4 +290,4 @@ public class MovieService : IMovieService
 
         return true;
     }
-}
+}   

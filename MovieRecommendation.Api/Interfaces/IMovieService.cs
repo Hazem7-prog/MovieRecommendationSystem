@@ -8,7 +8,7 @@ public interface IMovieService
 
     Task<MovieResponseDto?> GetByIdAsync(int id);
 
-    Task<List<MovieResponseDto>> GetAllAsync();
+    Task<PagedResultDto<MovieResponseDto>> GetAllAsync(MovieQueryDto query);
 
     Task<bool> UpdateAsync(int id, UpdateMovieDto dto);
 
