@@ -11,6 +11,7 @@ using MovieRecommendation.Api.Services;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,7 +46,8 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = builder.Configuration["JWT:Audience"],
 
         IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(builder.Configuration["JWT:Key"]!)),
+            Encoding.UTF8.GetBytes(
+                builder.Configuration["JWT:Key"]!)),
 
         ClockSkew = TimeSpan.Zero,
         NameClaimType = JwtRegisteredClaimNames.Name,
@@ -63,7 +65,7 @@ builder.Services.AddAuthentication(options =>
             return Task.CompletedTask;
         }
     };
-}); 
+});
 
 // Dependency Injection
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -74,6 +76,32 @@ builder.Services.AddScoped<IRatingService, RatingService>();
 builder.Services.AddScoped<IFavoriteService, FavoriteService>();
 builder.Services.AddScoped<IWatchlistService, WatchlistService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
+builder.Services.AddHttpClient<IAIService, OllamaAIService>((client) =>
+{
+    client.BaseAddress = new Uri(
+        builder.Configuration["Ollama:BaseUrl"]
+        ?? "http://localhost:11434/");
+});
+builder.Services.AddMemoryCache();
+// OpenAI
+#pragma warning disable OPENAI001
+
+var openAiApiKey = builder.Configuration[
+    "Clients:ResponsesClient:Credential:Key"];
+
+if (string.IsNullOrWhiteSpace(openAiApiKey))
+{
+    throw new InvalidOperationException(
+        "OpenAI API key is not configured.");
+}
+
+// Program.cs
+builder.Services.AddHttpClient<IAIService, OllamaAIService>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Ollama:BaseUrl"] ?? "http://localhost:11434/");
+    client.Timeout = TimeSpan.FromMinutes(5); // increase from default 100s
+});
+#pragma warning restore OPENAI001
 
 // Controllers
 builder.Services.AddControllers();
@@ -114,9 +142,33 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 });
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("recommendations", httpContext =>
+    {
+        var userId =
+            httpContext.User.FindFirst(
+                System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? httpContext.Connection.RemoteIpAddress?.ToString()
+            ?? "anonymous";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: userId,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+
+    options.RejectionStatusCode =
+        StatusCodes.Status429TooManyRequests;
+});
 
 var app = builder.Build();
 
+// Seed Roles + Admin
 using (var scope = app.Services.CreateScope())
 {
     var roleManager = scope.ServiceProvider
@@ -132,7 +184,8 @@ using (var scope = app.Services.CreateScope())
     {
         if (!await roleManager.RoleExistsAsync(role))
         {
-            await roleManager.CreateAsync(new IdentityRole(role));
+            await roleManager.CreateAsync(
+                new IdentityRole(role));
         }
     }
 
@@ -152,11 +205,15 @@ using (var scope = app.Services.CreateScope())
             CreatedAt = DateTime.UtcNow
         };
 
-        var result = await userManager.CreateAsync(adminUser, adminPassword);
+        var result = await userManager.CreateAsync(
+            adminUser,
+            adminPassword);
 
         if (result.Succeeded)
         {
-            await userManager.AddToRoleAsync(adminUser, "Admin");
+            await userManager.AddToRoleAsync(
+                adminUser,
+                "Admin");
         }
     }
 }
@@ -171,13 +228,19 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
+
+
 app.Use(async (context, next) =>
 {
-    Console.WriteLine($"Authenticated: {context.User.Identity?.IsAuthenticated}");
+    Console.WriteLine(
+        $"Authenticated: {context.User.Identity?.IsAuthenticated}");
 
     await next();
 });
+
 app.UseAuthorization();
+
+app.UseRateLimiter();
 
 app.MapControllers();
 

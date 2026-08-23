@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using MovieRecommendation.Api.Interfaces;
 
 namespace MovieRecommendation.Api.Controllers;
@@ -19,17 +20,20 @@ public class RecommendationsController : ControllerBase
     }
 
     [HttpGet]
+    [EnableRateLimiting("recommendations")]
     public async Task<IActionResult> GetRecommendations()
     {
-        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var userId =
+            User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        if (userId == null)
+        if (string.IsNullOrWhiteSpace(userId))
         {
             return Unauthorized();
         }
 
         var recommendations =
-            await _recommendationService.GetRecommendationsAsync(userId);
+            await _recommendationService
+                .GetRecommendationsAsync(userId);
 
         return Ok(recommendations);
     }

@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using MovieRecommendation.Api.Data;
 using MovieRecommendation.Api.DTOs.Movies;
 using MovieRecommendation.Api.DTOs.Watchlists;
@@ -10,10 +11,14 @@ namespace MovieRecommendation.Api.Services;
 public class WatchlistService : IWatchlistService
 {
     private readonly ApplicationDbContext _context;
+    private readonly IMemoryCache _cache;
 
-    public WatchlistService(ApplicationDbContext context)
+    public WatchlistService(
+        ApplicationDbContext context,
+        IMemoryCache cache)
     {
         _context = context;
+        _cache = cache;
     }
 
     public async Task<MovieResponseDto> AddAsync(
@@ -54,6 +59,8 @@ public class WatchlistService : IWatchlistService
 
         await _context.SaveChangesAsync();
 
+        _cache.Remove($"recommendations_{userId}");
+
         return new MovieResponseDto
         {
             Id = movie.Id,
@@ -66,9 +73,11 @@ public class WatchlistService : IWatchlistService
             PosterUrl = movie.PosterUrl,
             Directors = movie.Directors,
             CastMembers = movie.CastMembers,
+
             AverageRating = movie.Ratings.Any()
                 ? movie.Ratings.Average(r => r.Score)
                 : 0,
+
             Genres = movie.Genres
                 .Select(g => g.Name)
                 .ToList()
@@ -91,6 +100,8 @@ public class WatchlistService : IWatchlistService
 
         await _context.SaveChangesAsync();
 
+        _cache.Remove($"recommendations_{userId}");
+
         return true;
     }
 
@@ -98,7 +109,9 @@ public class WatchlistService : IWatchlistService
         string userId)
     {
         return await _context.Watchlists
-            .Where(w => w.UserId == userId && !w.Movie.IsDeleted)
+            .Where(w =>
+                w.UserId == userId &&
+                !w.Movie.IsDeleted)
             .Include(w => w.Movie)
                 .ThenInclude(m => m.Genres)
             .Include(w => w.Movie)

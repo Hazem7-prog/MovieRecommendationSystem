@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using MovieRecommendation.Api.Data;
 using MovieRecommendation.Api.DTOs.Favorites;
 using MovieRecommendation.Api.DTOs.Movies;
@@ -10,10 +11,14 @@ namespace MovieRecommendation.Api.Services;
 public class FavoriteService : IFavoriteService
 {
     private readonly ApplicationDbContext _context;
+    private readonly IMemoryCache _cache;
 
-    public FavoriteService(ApplicationDbContext context)
+    public FavoriteService(
+        ApplicationDbContext context,
+        IMemoryCache cache)
     {
         _context = context;
+        _cache = cache;
     }
 
     public async Task<MovieResponseDto> AddAsync(
@@ -54,6 +59,8 @@ public class FavoriteService : IFavoriteService
 
         await _context.SaveChangesAsync();
 
+        _cache.Remove($"recommendations_{userId}");
+
         return new MovieResponseDto
         {
             Id = movie.Id,
@@ -66,9 +73,11 @@ public class FavoriteService : IFavoriteService
             PosterUrl = movie.PosterUrl,
             Directors = movie.Directors,
             CastMembers = movie.CastMembers,
+
             AverageRating = movie.Ratings.Any()
                 ? movie.Ratings.Average(r => r.Score)
                 : 0,
+
             Genres = movie.Genres
                 .Select(g => g.Name)
                 .ToList()
@@ -91,6 +100,8 @@ public class FavoriteService : IFavoriteService
 
         await _context.SaveChangesAsync();
 
+        _cache.Remove($"recommendations_{userId}");
+
         return true;
     }
 
@@ -98,7 +109,9 @@ public class FavoriteService : IFavoriteService
         string userId)
     {
         return await _context.Favorites
-            .Where(f => f.UserId == userId && !f.Movie.IsDeleted)
+            .Where(f =>
+                f.UserId == userId &&
+                !f.Movie.IsDeleted)
             .Include(f => f.Movie)
                 .ThenInclude(m => m.Genres)
             .Include(f => f.Movie)

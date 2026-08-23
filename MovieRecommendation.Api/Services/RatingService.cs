@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using MovieRecommendation.Api.Data;
 using MovieRecommendation.Api.DTOs.Ratings;
 using MovieRecommendation.Api.Interfaces;
@@ -9,10 +10,14 @@ namespace MovieRecommendation.Api.Services;
 public class RatingService : IRatingService
 {
     private readonly ApplicationDbContext _context;
+    private readonly IMemoryCache _cache;
 
-    public RatingService(ApplicationDbContext context)
+    public RatingService(
+        ApplicationDbContext context,
+        IMemoryCache cache)
     {
         _context = context;
+        _cache = cache;
     }
 
     public async Task<RatingResponseDto> CreateAsync(
@@ -54,6 +59,8 @@ public class RatingService : IRatingService
         _context.Ratings.Add(rating);
 
         await _context.SaveChangesAsync();
+
+        _cache.Remove($"recommendations_{userId}");
 
         return new RatingResponseDto
         {
