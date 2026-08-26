@@ -32,10 +32,7 @@ public class RatingService : IRatingService
             throw new KeyNotFoundException("Movie not found.");
         }
 
-        if (dto.Score < 1 || dto.Score > 10)
-        {
-            throw new ArgumentException("Rating score must be between 1 and 10.");
-        }
+        // Score range is validated by DTO DataAnnotations; controller will return 400 for invalid input.
 
         var existingRating = await _context.Ratings
             .FirstOrDefaultAsync(r =>

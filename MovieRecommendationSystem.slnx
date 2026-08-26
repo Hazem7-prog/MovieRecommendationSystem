@@ -1,3 +1,7 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="README.md" />
+  </Folder>
+  <Project Path="MovieRecommendation.Api.Tests/MovieRecommendation.Api.Tests.csproj" />
   <Project Path="MovieRecommendation.Api/MovieRecommendation.Api.csproj" />
 </Solution>

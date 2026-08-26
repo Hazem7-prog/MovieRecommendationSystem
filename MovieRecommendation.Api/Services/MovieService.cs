@@ -167,19 +167,10 @@ public class MovieService : IMovieService
             movies = movies.OrderBy(m => m.Id);
         }
 
-        // Pagination settings
-        var pageSize = query.PageSize <= 0
-            ? 10
-            : query.PageSize;
+        // Pagination settings are validated by MovieQueryDto DataAnnotations (PageNumber >= 1, PageSize 1-50)
+        var pageSize = query.PageSize;
 
-        var pageNumber = query.PageNumber <= 0
-            ? 1
-            : query.PageNumber;
-
-        if (pageSize > 50)
-        {
-            pageSize = 50;
-        }
+        var pageNumber = query.PageNumber;
 
         // Total count before pagination
         var totalCount = await movies.CountAsync();
