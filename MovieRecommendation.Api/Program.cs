@@ -16,6 +16,22 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ======================================================
+// External Only Mode
+// ======================================================
+// Local:
+// false by default -> full API + Database + Identity.
+//
+// Deployment:
+// ExternalOnlyMode=true
+// -> External recommendation endpoint can run
+//    without needing the database startup seed.
+// ======================================================
+
+var externalOnlyMode =
+    builder.Configuration.GetValue<bool>(
+        "ExternalOnlyMode");
+
 // Database
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
@@ -79,7 +95,9 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddMemoryCache();
 
 // Dependency Injection
-builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<
+    IAuthService,
+    AuthService>();
 
 builder.Services.AddScoped<
     ITokenService,
@@ -251,10 +269,21 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+// ======================================================
 // Seed Roles + Admin
-using (var scope =
-       app.Services.CreateScope())
+// ======================================================
+// Only run this when using the full application.
+//
+// In ExternalOnlyMode we intentionally skip database
+// startup work because the external recommendation
+// endpoint does not require our local database.
+// ======================================================
+
+if (!externalOnlyMode)
 {
+    using var scope =
+        app.Services.CreateScope();
+
     var roleManager =
         scope.ServiceProvider
             .GetRequiredService<
