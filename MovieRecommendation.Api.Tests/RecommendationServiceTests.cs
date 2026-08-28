@@ -86,6 +86,9 @@ public class RecommendationServiceTests
         var aiMock =
             new Mock<IAIService>();
 
+        var tmdbMock =
+            new Mock<ITmdbService>();
+
         var cache =
             TestHelpers.CreateMemoryCache();
 
@@ -94,7 +97,8 @@ public class RecommendationServiceTests
                 ctx,
                 aiMock.Object,
                 cache,
-                new NullLogger<RecommendationService>());
+                new NullLogger<RecommendationService>(),
+                tmdbMock.Object);
 
         var recs =
             await svc.GetRecommendationsAsync(
@@ -194,6 +198,9 @@ public class RecommendationServiceTests
             .ReturnsAsync(
                 new List<AIRecommendationExplanationDto>());
 
+        var tmdbMock =
+            new Mock<ITmdbService>();
+
         var cache =
             TestHelpers.CreateMemoryCache();
 
@@ -202,7 +209,8 @@ public class RecommendationServiceTests
                 ctx,
                 aiMock.Object,
                 cache,
-                new NullLogger<RecommendationService>());
+                new NullLogger<RecommendationService>(),
+                tmdbMock.Object);
 
         var recs =
             await svc.GetRecommendationsAsync(
@@ -242,6 +250,9 @@ public class RecommendationServiceTests
         var aiMock =
             new Mock<IAIService>();
 
+        var tmdbMock =
+            new Mock<ITmdbService>();
+
         var cache =
             TestHelpers.CreateMemoryCache();
 
@@ -250,7 +261,8 @@ public class RecommendationServiceTests
                 ctx,
                 aiMock.Object,
                 cache,
-                new NullLogger<RecommendationService>());
+                new NullLogger<RecommendationService>(),
+                tmdbMock.Object);
 
         var first =
             await svc.GetRecommendationsAsync(
@@ -336,6 +348,9 @@ public class RecommendationServiceTests
                     }
                 });
 
+        var tmdbMock =
+            new Mock<ITmdbService>();
+
         var cache =
             TestHelpers.CreateMemoryCache();
 
@@ -344,7 +359,8 @@ public class RecommendationServiceTests
                 ctx,
                 aiMock.Object,
                 cache,
-                new NullLogger<RecommendationService>());
+                new NullLogger<RecommendationService>(),
+                tmdbMock.Object);
 
         var recs =
             await svc.GetRecommendationsAsync(
@@ -418,6 +434,9 @@ public class RecommendationServiceTests
             .ThrowsAsync(
                 new Exception("AI down"));
 
+        var tmdbMock =
+            new Mock<ITmdbService>();
+
         var cache =
             TestHelpers.CreateMemoryCache();
 
@@ -426,7 +445,8 @@ public class RecommendationServiceTests
                 ctx,
                 aiMock.Object,
                 cache,
-                new NullLogger<RecommendationService>());
+                new NullLogger<RecommendationService>(),
+                tmdbMock.Object);
 
         var recs =
             await svc.GetRecommendationsAsync(

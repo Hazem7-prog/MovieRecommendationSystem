@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using MovieRecommendation.Api.Data;
 using MovieRecommendation.Api.DTOs.AI;
+using MovieRecommendation.Api.DTOs.ExternalRecommendations;
 using MovieRecommendation.Api.DTOs.Recommendations;
 using MovieRecommendation.Api.Interfaces;
 
@@ -14,32 +15,39 @@ public class RecommendationService : IRecommendationService
     private readonly IAIService _aiService;
     private readonly IMemoryCache _cache;
     private readonly ILogger<RecommendationService> _logger;
+    private readonly ITmdbService _tmdbService;
 
     public RecommendationService(
         ApplicationDbContext context,
         IAIService aiService,
         IMemoryCache cache,
-        ILogger<RecommendationService> logger)
+        ILogger<RecommendationService> logger,
+        ITmdbService tmdbService)
     {
         _context = context;
         _aiService = aiService;
         _cache = cache;
         _logger = logger;
+        _tmdbService = tmdbService;
     }
 
     public async Task<List<RecommendationResponseDto>>
-        GetRecommendationsAsync(string userId)
+        GetRecommendationsAsync(
+            string userId)
     {
-        var totalStopwatch = Stopwatch.StartNew();
+        var totalStopwatch =
+            Stopwatch.StartNew();
 
-        var cacheKey = $"recommendations_{userId}";
+        var cacheKey =
+            $"recommendations_{userId}";
 
         _logger.LogInformation(
             "Recommendation request started.");
 
         if (_cache.TryGetValue(
             cacheKey,
-            out List<RecommendationResponseDto>? cachedRecommendations))
+            out List<RecommendationResponseDto>?
+                cachedRecommendations))
         {
             totalStopwatch.Stop();
 
@@ -53,27 +61,40 @@ public class RecommendationService : IRecommendationService
         _logger.LogInformation(
             "Recommendation Cache MISS. Generating new recommendations.");
 
-        var highRatedMovies = await _context.Ratings
-            .Where(r =>
-                r.UserId == userId &&
-                r.Score >= 7)
-            .Include(r => r.Movie)
-                .ThenInclude(m => m.Genres)
-            .ToListAsync();
+        var highRatedMovies =
+            await _context.Ratings
+                .Where(r =>
+                    r.UserId == userId &&
+                    r.Score >= 7)
+                .Include(r =>
+                    r.Movie)
+                    .ThenInclude(m =>
+                        m.Genres)
+                .ToListAsync();
 
-        var favoriteMovies = await _context.Favorites
-            .Where(f => f.UserId == userId)
-            .Include(f => f.Movie)
-                .ThenInclude(m => m.Genres)
-            .Select(f => f.Movie)
-            .ToListAsync();
+        var favoriteMovies =
+            await _context.Favorites
+                .Where(f =>
+                    f.UserId == userId)
+                .Include(f =>
+                    f.Movie)
+                    .ThenInclude(m =>
+                        m.Genres)
+                .Select(f =>
+                    f.Movie)
+                .ToListAsync();
 
-        var watchlistMovies = await _context.Watchlists
-            .Where(w => w.UserId == userId)
-            .Include(w => w.Movie)
-                .ThenInclude(m => m.Genres)
-            .Select(w => w.Movie)
-            .ToListAsync();
+        var watchlistMovies =
+            await _context.Watchlists
+                .Where(w =>
+                    w.UserId == userId)
+                .Include(w =>
+                    w.Movie)
+                    .ThenInclude(m =>
+                        m.Genres)
+                .Select(w =>
+                    w.Movie)
+                .ToListAsync();
 
         _logger.LogInformation(
             "Loaded user preference data. HighRatings: {HighRatings}, Favorites: {Favorites}, Watchlist: {Watchlist}",
@@ -92,48 +113,69 @@ public class RecommendationService : IRecommendationService
             _logger.LogInformation(
                 "Cold start detected. Using discovery recommendations.");
 
-            var coldStartMovies = await _context.Movies
-                .Where(m => !m.IsDeleted)
-                .Include(m => m.Genres)
-                .Include(m => m.Ratings)
-                .Select(movie => new
-                {
-                    Movie = movie,
+            var coldStartMovies =
+                await _context.Movies
+                    .Where(m =>
+                        !m.IsDeleted)
+                    .Include(m =>
+                        m.Genres)
+                    .Include(m =>
+                        m.Ratings)
+                    .Select(movie =>
+                        new
+                        {
+                            Movie = movie,
 
-                    AverageRating = movie.Ratings.Any()
-                        ? movie.Ratings.Average(r => r.Score)
-                        : 0
-                })
-                .OrderByDescending(x => x.AverageRating)
-                .ThenByDescending(x => x.Movie.Id)
-                .Take(10)
-                .ToListAsync();
+                            AverageRating =
+                                movie.Ratings.Any()
+                                    ? movie.Ratings
+                                        .Average(r =>
+                                            r.Score)
+                                    : 0
+                        })
+                    .OrderByDescending(x =>
+                        x.AverageRating)
+                    .ThenByDescending(x =>
+                        x.Movie.Id)
+                    .Take(10)
+                    .ToListAsync();
 
-            var coldStartRecommendations = coldStartMovies
-                .Select(item => new RecommendationResponseDto
-                {
-                    MovieId = item.Movie.Id,
+            var coldStartRecommendations =
+                coldStartMovies
+                    .Select(item =>
+                        new RecommendationResponseDto
+                        {
+                            MovieId =
+                                item.Movie.Id,
 
-                    Title = item.Movie.Title,
+                            Title =
+                                item.Movie.Title,
 
-                    PosterUrl = item.Movie.PosterUrl,
+                            PosterUrl =
+                                item.Movie.PosterUrl,
 
-                    AverageRating = item.AverageRating,
+                            AverageRating =
+                                item.AverageRating,
 
-                    Genres = item.Movie.Genres
-                        .Select(g => g.Name)
-                        .ToList(),
+                            Genres =
+                                item.Movie.Genres
+                                    .Select(g =>
+                                        g.Name)
+                                    .ToList(),
 
-                    RecommendationScore = item.AverageRating,
+                            RecommendationScore =
+                                item.AverageRating,
 
-                    RecommendationType = "Discovery",
+                            RecommendationType =
+                                "Discovery",
 
-                    Reason =
-                        "A discovery pick while we learn your movie preferences.",
+                            Reason =
+                                "A discovery pick while we learn your movie preferences.",
 
-                    Confidence = 0
-                })
-                .ToList();
+                            Confidence =
+                                0
+                        })
+                    .ToList();
 
             var coldStartCacheOptions =
                 new MemoryCacheEntryOptions()
@@ -166,10 +208,12 @@ public class RecommendationService : IRecommendationService
         {
             foreach (var genre in rating.Movie.Genres)
             {
-                if (!genreScores.ContainsKey(genre.Id))
+                if (!genreScores.ContainsKey(
+                    genre.Id))
                 {
                     genreScores[genre.Id] = 0;
-                    genreNames[genre.Id] = genre.Name;
+                    genreNames[genre.Id] =
+                        genre.Name;
                 }
 
                 genreScores[genre.Id] += 3;
@@ -181,10 +225,12 @@ public class RecommendationService : IRecommendationService
         {
             foreach (var genre in movie.Genres)
             {
-                if (!genreScores.ContainsKey(genre.Id))
+                if (!genreScores.ContainsKey(
+                    genre.Id))
                 {
                     genreScores[genre.Id] = 0;
-                    genreNames[genre.Id] = genre.Name;
+                    genreNames[genre.Id] =
+                        genre.Name;
                 }
 
                 genreScores[genre.Id] += 2;
@@ -196,22 +242,32 @@ public class RecommendationService : IRecommendationService
         {
             foreach (var genre in movie.Genres)
             {
-                if (!genreScores.ContainsKey(genre.Id))
+                if (!genreScores.ContainsKey(
+                    genre.Id))
                 {
                     genreScores[genre.Id] = 0;
-                    genreNames[genre.Id] = genre.Name;
+                    genreNames[genre.Id] =
+                        genre.Name;
                 }
 
                 genreScores[genre.Id] += 1;
             }
         }
 
-        var userMovieIds = highRatedMovies
-            .Select(r => r.MovieId)
-            .Concat(favoriteMovies.Select(m => m.Id))
-            .Concat(watchlistMovies.Select(m => m.Id))
-            .Distinct()
-            .ToList();
+        var userMovieIds =
+            highRatedMovies
+                .Select(r =>
+                    r.MovieId)
+                .Concat(
+                    favoriteMovies
+                        .Select(m =>
+                            m.Id))
+                .Concat(
+                    watchlistMovies
+                        .Select(m =>
+                            m.Id))
+                .Distinct()
+                .ToList();
 
         var userInteractions =
             new List<string>();
@@ -234,50 +290,70 @@ public class RecommendationService : IRecommendationService
                 $"Added {movie.Title} to watchlist");
         }
 
-        var preferredGenres = genreScores
-            .OrderByDescending(g => g.Value)
-            .Select(g => genreNames[g.Key])
-            .Distinct()
-            .ToList();
+        var preferredGenres =
+            genreScores
+                .OrderByDescending(g =>
+                    g.Value)
+                .Select(g =>
+                    genreNames[g.Key])
+                .Distinct()
+                .ToList();
 
-        var candidateMovies = await _context.Movies
-            .Where(m =>
-                !m.IsDeleted &&
-                !userMovieIds.Contains(m.Id))
-            .Include(m => m.Genres)
-            .Include(m => m.Ratings)
-            .ToListAsync();
+        var candidateMovies =
+            await _context.Movies
+                .Where(m =>
+                    !m.IsDeleted &&
+                    !userMovieIds.Contains(
+                        m.Id))
+                .Include(m =>
+                    m.Genres)
+                .Include(m =>
+                    m.Ratings)
+                .ToListAsync();
 
-        var scoredMovies = candidateMovies
-            .Select(movie =>
-            {
-                var genreScore = movie.Genres
-                    .Where(g =>
-                        genreScores.ContainsKey(g.Id))
-                    .Sum(g =>
-                        genreScores[g.Id]);
-
-                var averageRating =
-                    movie.Ratings.Any()
-                        ? movie.Ratings.Average(r => r.Score)
-                        : 0;
-
-                var recommendationScore =
-                    genreScore +
-                    (averageRating * 0.2);
-
-                return new
+        var scoredMovies =
+            candidateMovies
+                .Select(movie =>
                 {
-                    Movie = movie,
-                    GenreScore = genreScore,
-                    AverageRating = averageRating,
-                    RecommendationScore = recommendationScore
-                };
-            })
-            .OrderByDescending(
-                x => x.RecommendationScore)
-            .Take(10)
-            .ToList();
+                    var genreScore =
+                        movie.Genres
+                            .Where(g =>
+                                genreScores
+                                    .ContainsKey(
+                                        g.Id))
+                            .Sum(g =>
+                                genreScores[g.Id]);
+
+                    var averageRating =
+                        movie.Ratings.Any()
+                            ? movie.Ratings
+                                .Average(r =>
+                                    r.Score)
+                            : 0;
+
+                    var recommendationScore =
+                        genreScore +
+                        (averageRating * 0.2);
+
+                    return new
+                    {
+                        Movie =
+                            movie,
+
+                        GenreScore =
+                            genreScore,
+
+                        AverageRating =
+                            averageRating,
+
+                        RecommendationScore =
+                            recommendationScore
+                    };
+                })
+                .OrderByDescending(x =>
+                    x.RecommendationScore)
+                .Take(10)
+                .ToList();
 
         _logger.LogInformation(
             "Recommendation engine produced {MoviesCount} movies.",
@@ -287,27 +363,35 @@ public class RecommendationService : IRecommendationService
         {
             totalStopwatch.Stop();
 
-            return new List<RecommendationResponseDto>();
+            return new List<
+                RecommendationResponseDto>();
         }
 
-        var moviesForAI = scoredMovies
-            .Select(item =>
-                new MovieForAIRequestDto
-                {
-                    MovieId = item.Movie.Id,
+        var moviesForAI =
+            scoredMovies
+                .Select(item =>
+                    new MovieForAIRequestDto
+                    {
+                        MovieId =
+                            item.Movie.Id,
 
-                    Title = item.Movie.Title,
+                        Title =
+                            item.Movie.Title,
 
-                    Genres = item.Movie.Genres
-                        .Select(g => g.Name)
-                        .ToList()
-                })
-            .ToList();
+                        Genres =
+                            item.Movie.Genres
+                                .Select(g =>
+                                    g.Name)
+                                .ToList()
+                    })
+                .ToList();
 
         var aiExplanations =
-            new List<AIRecommendationExplanationDto>();
+            new List<
+                AIRecommendationExplanationDto>();
 
-        var aiSucceeded = false;
+        var aiSucceeded =
+            false;
 
         var aiStopwatch =
             Stopwatch.StartNew();
@@ -327,7 +411,8 @@ public class RecommendationService : IRecommendationService
 
                         moviesForAI);
 
-            aiSucceeded = true;
+            aiSucceeded =
+                true;
 
             aiStopwatch.Stop();
 
@@ -345,57 +430,67 @@ public class RecommendationService : IRecommendationService
                 aiStopwatch.ElapsedMilliseconds);
         }
 
-        var recommendations = scoredMovies
-            .Select(item =>
-            {
-                var aiResult = aiExplanations
-                    .FirstOrDefault(a =>
-                        a.MovieId == item.Movie.Id);
-
-                var fallbackReason =
-                    GenerateFallbackReason(
-                        item.Movie.Genres
-                            .Select(g => g.Name)
-                            .ToList(),
-
-                        preferredGenres);
-
-                var recommendationType =
-                    item.GenreScore > 0
-                        ? "Personalized"
-                        : "Discovery";
-
-                return new RecommendationResponseDto
+        var recommendations =
+            scoredMovies
+                .Select(item =>
                 {
-                    MovieId = item.Movie.Id,
+                    var aiResult =
+                        aiExplanations
+                            .FirstOrDefault(a =>
+                                a.MovieId ==
+                                item.Movie.Id);
 
-                    Title = item.Movie.Title,
+                    var fallbackReason =
+                        GenerateFallbackReason(
+                            item.Movie.Genres
+                                .Select(g =>
+                                    g.Name)
+                                .ToList(),
 
-                    PosterUrl =
-                        item.Movie.PosterUrl,
+                            preferredGenres);
 
-                    AverageRating =
-                        item.AverageRating,
+                    var recommendationType =
+                        item.GenreScore > 0
+                            ? "Personalized"
+                            : "Discovery";
 
-                    Genres = item.Movie.Genres
-                        .Select(g => g.Name)
-                        .ToList(),
+                    return new
+                        RecommendationResponseDto
+                    {
+                        MovieId =
+                                item.Movie.Id,
 
-                    RecommendationScore =
-                        item.RecommendationScore,
+                        Title =
+                                item.Movie.Title,
 
-                    RecommendationType =
-                        recommendationType,
+                        PosterUrl =
+                                item.Movie.PosterUrl,
 
-                    Reason =
-                        aiResult?.Reason
-                        ?? fallbackReason,
+                        AverageRating =
+                                item.AverageRating,
 
-                    Confidence =
-                        aiResult?.Confidence ?? 0
-                };
-            })
-            .ToList();
+                        Genres =
+                                item.Movie.Genres
+                                    .Select(g =>
+                                        g.Name)
+                                    .ToList(),
+
+                        RecommendationScore =
+                                item.RecommendationScore,
+
+                        RecommendationType =
+                                recommendationType,
+
+                        Reason =
+                                aiResult?.Reason
+                                ?? fallbackReason,
+
+                        Confidence =
+                                aiResult?.Confidence
+                                ?? 0
+                    };
+                })
+                .ToList();
 
         var cacheDuration =
             aiSucceeded
@@ -423,16 +518,248 @@ public class RecommendationService : IRecommendationService
         return recommendations;
     }
 
+    public async Task<
+        List<ExternalRecommendationResponseDto>>
+        GetExternalRecommendationsAsync(
+            ExternalRecommendationRequestDto request)
+    {
+        var genreScores =
+            new Dictionary<string, double>(
+                StringComparer.OrdinalIgnoreCase);
+
+        // Favorites = +2
+        foreach (var movie in request.Favorites)
+        {
+            foreach (var rawGenre in movie.Genres)
+            {
+                var genre =
+                    NormalizeGenre(
+                        rawGenre);
+
+                if (!genreScores.ContainsKey(
+                    genre))
+                {
+                    genreScores[genre] =
+                        0;
+                }
+
+                genreScores[genre] +=
+                    2;
+            }
+        }
+
+        // Watch Later = +1
+        foreach (var movie in request.WatchLater)
+        {
+            foreach (var rawGenre in movie.Genres)
+            {
+                var genre =
+                    NormalizeGenre(
+                        rawGenre);
+
+                if (!genreScores.ContainsKey(
+                    genre))
+                {
+                    genreScores[genre] =
+                        0;
+                }
+
+                genreScores[genre] +=
+                    1;
+            }
+        }
+
+        var tmdbGenres =
+            await _tmdbService
+                .GetMovieGenresAsync();
+
+        var preferredGenreIds =
+            genreScores
+                .OrderByDescending(g =>
+                    g.Value)
+                .Where(g =>
+                    tmdbGenres.ContainsKey(
+                        g.Key))
+                .Select(g =>
+                    tmdbGenres[g.Key])
+                .Take(5)
+                .ToList();
+
+        var candidates =
+            await _tmdbService
+                .GetMovieCandidatesAsync(
+                    preferredGenreIds);
+
+        /*
+         * ID Normalization
+         *
+         * TMDB IDs stay as they are.
+         * IMDb IDs are resolved into TMDB IDs.
+         *
+         * After this point the engine only deals
+         * with TMDB IDs when excluding movies.
+         */
+        var allInteractions =
+            request.Favorites
+                .Concat(
+                    request.WatchLater)
+                .ToList();
+
+        var resolveTasks =
+            allInteractions
+                .Select(interaction =>
+                    _tmdbService
+                        .ResolveTmdbMovieIdAsync(
+                            interaction.Id,
+                            interaction.Source));
+
+        var resolvedIds =
+            await Task.WhenAll(
+                resolveTasks);
+
+        var interactedTmdbIds =
+            resolvedIds
+                .Where(id =>
+                    id.HasValue)
+                .Select(id =>
+                    id!.Value)
+                .ToHashSet();
+
+        var genreNamesById =
+            tmdbGenres
+                .ToDictionary(
+                    x => x.Value,
+                    x => x.Key);
+
+        var recommendations =
+            candidates
+                .Where(movie =>
+                    !interactedTmdbIds.Contains(
+                        movie.Id))
+                .Select(movie =>
+                {
+                    var movieGenres =
+                        movie.GenreIds
+                            .Where(id =>
+                                genreNamesById
+                                    .ContainsKey(
+                                        id))
+                            .Select(id =>
+                                genreNamesById[id])
+                            .ToList();
+
+                    var genreScore =
+                        movieGenres
+                            .Where(genre =>
+                                genreScores
+                                    .ContainsKey(
+                                        genre))
+                            .Sum(genre =>
+                                genreScores[
+                                    genre]);
+
+                    var recommendationScore =
+                        (genreScore * 0.8) +
+                        (movie.VoteAverage * 0.5);
+
+                    var matchedGenres =
+                        movieGenres
+                            .Where(genre =>
+                                genreScores
+                                    .ContainsKey(
+                                        genre))
+                            .ToList();
+
+                    var recommendationType =
+                        genreScore > 0
+                            ? "Personalized"
+                            : "Discovery";
+
+                    var reason =
+                        matchedGenres.Any()
+                            ? $"Recommended based on your preference for {string.Join(", ", matchedGenres)}."
+                            : "A discovery pick outside your usual genres.";
+
+                    return new
+                        ExternalRecommendationResponseDto
+                    {
+                        Key =
+                                movie.Id.ToString(),
+
+                        Source =
+                                "tmdb",
+
+                        Type =
+                                "movie",
+
+                        Title =
+                                movie.Title,
+
+                        PosterUrl =
+                                string.IsNullOrWhiteSpace(
+                                    movie.PosterPath)
+                                    ? string.Empty
+                                    : $"https://image.tmdb.org/t/p/w500{movie.PosterPath}",
+
+                        Rating =
+                                movie.VoteAverage,
+
+                        Genres =
+                                movieGenres,
+
+                        RecommendationScore =
+                                Math.Round(
+                                    recommendationScore,
+                                    2),
+
+                        RecommendationType =
+                                recommendationType,
+
+                        Reason =
+                                reason
+                    };
+                })
+                .OrderByDescending(x =>
+                    x.RecommendationScore)
+                .Take(10)
+                .ToList();
+
+        return recommendations;
+    }
+
+    private static string NormalizeGenre(
+        string genre)
+    {
+        return genre
+            .Trim()
+            .ToLowerInvariant()
+            switch
+        {
+            "sci-fi" =>
+                "Science Fiction",
+
+            "scifi" =>
+                "Science Fiction",
+
+            "science-fiction" =>
+                "Science Fiction",
+
+            _ =>
+                genre.Trim()
+        };
+    }
+
     private static string GenerateFallbackReason(
         List<string> movieGenres,
         List<string> preferredGenres)
     {
-        var matchedGenres = movieGenres
-            .Where(movieGenre =>
-                preferredGenres.Contains(
-                    movieGenre,
-                    StringComparer.OrdinalIgnoreCase))
-            .ToList();
+        var matchedGenres =
+            movieGenres
+                .Where(movieGenre =>
+                    preferredGenres.Contains(
+                        movieGenre,
+                        StringComparer.OrdinalIgnoreCase))
+                .ToList();
 
         if (matchedGenres.Any())
         {

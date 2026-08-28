@@ -9,6 +9,7 @@ using MovieRecommendation.Api.Interfaces;
 using MovieRecommendation.Api.Middleware;
 using MovieRecommendation.Api.Models;
 using MovieRecommendation.Api.Services;
+using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -30,6 +31,11 @@ builder.Services
     .AddDefaultTokenProviders();
 
 // JWT Authentication
+var jwtKey =
+    builder.Configuration["JWT:Key"]
+    ?? throw new InvalidOperationException(
+        "JWT Key is not configured.");
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme =
@@ -57,7 +63,7 @@ builder.Services.AddAuthentication(options =>
             IssuerSigningKey =
                 new SymmetricSecurityKey(
                     Encoding.UTF8.GetBytes(
-                        builder.Configuration["JWT:Key"]!)),
+                        jwtKey)),
 
             ClockSkew = TimeSpan.Zero,
 
@@ -68,6 +74,9 @@ builder.Services.AddAuthentication(options =>
                 ClaimTypes.Role
         };
 });
+
+// Cache
+builder.Services.AddMemoryCache();
 
 // Dependency Injection
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -100,22 +109,42 @@ builder.Services.AddScoped<
     IRecommendationService,
     RecommendationService>();
 
+builder.Services.AddScoped<
+    ITmdbService,
+    TmdbService>();
+
+// TMDB
+builder.Services.AddHttpClient("TMDB", client =>
+{
+    client.BaseAddress =
+        new Uri(
+            "https://api.themoviedb.org/3/");
+
+    var token =
+        builder.Configuration[
+            "TMDB:AccessToken"];
+
+    client.DefaultRequestHeaders.Authorization =
+        new AuthenticationHeaderValue(
+            "Bearer",
+            token);
+});
+
 // Ollama AI
+// External recommendations do NOT use Ollama.
 builder.Services.AddHttpClient<
     IAIService,
     OllamaAIService>(client =>
     {
         client.BaseAddress =
             new Uri(
-                builder.Configuration["Ollama:BaseUrl"]
+                builder.Configuration[
+                    "Ollama:BaseUrl"]
                 ?? "http://localhost:11434/");
 
         client.Timeout =
             TimeSpan.FromSeconds(30);
     });
-
-// Cache
-builder.Services.AddMemoryCache();
 
 // Controllers
 builder.Services.AddControllers();
@@ -132,21 +161,25 @@ builder.Services.AddSwaggerGen(c =>
             Title =
                 "Movie Recommendation API",
 
-            Version = "v1"
+            Version =
+                "v1"
         });
 
     c.AddSecurityDefinition(
         "Bearer",
         new OpenApiSecurityScheme
         {
-            Name = "Authorization",
+            Name =
+                "Authorization",
 
             Type =
                 SecuritySchemeType.Http,
 
-            Scheme = "bearer",
+            Scheme =
+                "bearer",
 
-            BearerFormat = "JWT",
+            BearerFormat =
+                "JWT",
 
             In =
                 ParameterLocation.Header,
@@ -167,7 +200,8 @@ builder.Services.AddSwaggerGen(c =>
                             Type =
                                 ReferenceType.SecurityScheme,
 
-                            Id = "Bearer"
+                            Id =
+                                "Bearer"
                         }
                 },
 
@@ -248,54 +282,61 @@ using (var scope =
     }
 
     var adminEmail =
-        "admin@movierecommendation.com";
+        builder.Configuration[
+            "Admin:Email"];
 
     var adminPassword =
-        "Admin@123456";
+        builder.Configuration[
+            "Admin:Password"];
 
-    var adminUser =
-        await userManager
-            .FindByEmailAsync(adminEmail);
-
-    if (adminUser == null)
+    if (!string.IsNullOrWhiteSpace(
+            adminEmail) &&
+        !string.IsNullOrWhiteSpace(
+            adminPassword))
     {
-        adminUser =
-            new ApplicationUser
-            {
-                FullName =
-                    "System Admin",
-
-                UserName =
-                    adminEmail,
-
-                Email =
-                    adminEmail,
-
-                CreatedAt =
-                    DateTime.UtcNow
-            };
-
-        var result =
-            await userManager.CreateAsync(
-                adminUser,
-                adminPassword);
-
-        if (result.Succeeded)
-        {
+        var adminUser =
             await userManager
-                .AddToRoleAsync(
-                    adminUser,
-                    "Admin");
+                .FindByEmailAsync(
+                    adminEmail);
+
+        if (adminUser == null)
+        {
+            adminUser =
+                new ApplicationUser
+                {
+                    FullName =
+                        "System Admin",
+
+                    UserName =
+                        adminEmail,
+
+                    Email =
+                        adminEmail,
+
+                    CreatedAt =
+                        DateTime.UtcNow
+                };
+
+            var result =
+                await userManager
+                    .CreateAsync(
+                        adminUser,
+                        adminPassword);
+
+            if (result.Succeeded)
+            {
+                await userManager
+                    .AddToRoleAsync(
+                        adminUser,
+                        "Admin");
+            }
         }
     }
 }
 
-// Swagger
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// Swagger available online for integration testing
+app.UseSwagger();
+app.UseSwaggerUI();
 
 // Global Exception Handling
 app.UseMiddleware<
